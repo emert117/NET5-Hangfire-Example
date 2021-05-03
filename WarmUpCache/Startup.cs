@@ -1,16 +1,13 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using Hangfire;
+using Hangfire.MemoryStorage;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
+using WarmUpCache.DAL;
+using WarmUpCache.Services;
 
 namespace WarmUpCache
 {
@@ -26,8 +23,17 @@ namespace WarmUpCache
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-
             services.AddControllers();
+            
+            services.AddSingleton<ICacheWarmUpService, CacheWarmUpService>();
+            services.AddSingleton<ICityRepository, CityRepository>();
+            services.AddSingleton<ICityService, CityService>();
+
+            services.AddMemoryCache();
+
+            services.AddHangfire(c => c.UseMemoryStorage());
+            services.AddHangfireServer();
+
             services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "WarmUpCache", Version = "v1" });
@@ -54,6 +60,10 @@ namespace WarmUpCache
             {
                 endpoints.MapControllers();
             });
+
+            app.UseHangfireServer();
+            var _cacheWarmUpService = app.ApplicationServices.GetService<ICacheWarmUpService>(); 
+            BackgroundJob.Enqueue(() => _cacheWarmUpService.WarmUp());
         }
     }
 }
